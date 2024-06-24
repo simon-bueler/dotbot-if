@@ -5,11 +5,27 @@ import subprocess
 import dotbot
 from dotbot.dispatcher import Dispatcher
 from dotbot.util import module
-from dotbot.plugins import Clean, Create, Link, Shell
+from dotbot.plugins import Clean, Create, Link, Plugins, Shell
 
 
 class If(dotbot.Plugin):
     _directive = 'if'
+
+    def _load_plugins(self):        
+        plugins = []
+        plugin_directories = list(self._context.options().plugin_dirs)
+        if not self._context.options().disable_built_in_plugins:
+            plugins.extend([Clean, Create, Link, Plugins, Shell])
+        plugin_paths = []
+        for directory in plugin_directories:
+            for plugin_path in glob.glob(os.path.join(directory, "*.py")):
+                plugin_paths.append(plugin_path)
+        for plugin_path in self._context.options().plugins:
+            plugin_paths.append(plugin_path)
+        for plugin_path in plugin_paths:
+            abspath = os.path.abspath(plugin_path)
+            plugins.extend(module.load(abspath))
+        return plugins
 
     def can_handle(self, directive):
         return directive == self._directive
@@ -39,25 +55,12 @@ class If(dotbot.Plugin):
 
         return self._run_internal(data['met'] if is_met else data['unmet'])
 
-    def _load_plugins(self):
-        plugin_paths = self._context.options().plugins
-        plugins = []
-        for dir in self._context.options().plugin_dirs:
-            for path in glob.glob(os.path.join(dir, '*.py')):
-                plugin_paths.append(path)
-        for path in plugin_paths:
-            abspath = os.path.abspath(path)
-            plugins.extend(module.load(abspath))
-        if not self._context.options().disable_built_in_plugins:
-            plugins.extend([Clean, Create, Link, Shell])
-        return plugins
+
 
     def _run_internal(self, data):
-        dispatcher = Dispatcher(
-            self._context.base_directory(),
-            only=self._context.options().only,
-            skip=self._context.options().skip,
-            options=self._context.options(),
-            plugins=self._load_plugins(),
-        )
+        dispatcher = Dispatcher(self._context.base_directory(),
+                                only=self._context.options().only,
+                                skip=self._context.options().skip,
+                                options=self._context.options(),
+                                plugins=self._load_plugins())
         return dispatcher.dispatch(data)
